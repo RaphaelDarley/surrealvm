@@ -1,0 +1,7 @@
+[package]
+name = "surrealvm"
+version = "0.1.0"
+edition = "2021"
+authors = ["Raphael Darley <raphael@raphaeldarley.com>"]
+
+[dependencies]
