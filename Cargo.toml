@@ -5,3 +5,11 @@ edition = "2021"
 authors = ["Raphael Darley <raphael@raphaeldarley.com>"]
 
 [dependencies]
+anyhow = "1.0.86"
+clap = { version = "4.5.15", features = ["derive"] }
+flate2 = "1.0.31"
+homedir = "0.3.3"
+reqwest = { version = "0.12.5", features = ["blocking"] }
+semver = "1.0.23"
+tar = "0.4.41"
+thiserror = "1.0.63"
