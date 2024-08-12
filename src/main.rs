@@ -30,14 +30,19 @@ struct CLI {
 
 #[derive(Subcommand)]
 enum SubCommands {
+    /// setup SurrealVM directory with copy of binary and configures PATH
     Setup,
+    /// completely uninstally SurrealVM and removes itself from PATH
     Clean,
+    /// list installed SurrealDB versions
     #[command(alias = "ls")]
     List,
+    /// install specified SurrealDB version
     Install {
         #[arg(value_name = "VERSION", default_value_t = String::from("latest"))]
         version: String,
     },
+    /// use specified SurrealDB version
     Use {
         #[arg(value_name = "VERSION", default_value_t = String::from("latest"))]
         version: String,
