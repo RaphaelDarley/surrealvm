@@ -3,6 +3,10 @@ name = "surrealvm"
 version = "0.1.0"
 edition = "2021"
 authors = ["Raphael Darley <raphael@raphaeldarley.com>"]
+license = "MIT OR Apache-2.0"
+description = "A version manager for SurrealDB"
+homepage = "https://github.com/raphaeldarley/surrealvm"
+repository = "https://github.com/raphaeldarley/surrealvm"
 
 [dependencies]
 anyhow = "1.0.86"
