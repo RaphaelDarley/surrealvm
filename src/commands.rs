@@ -1,9 +1,9 @@
 use std::{
     env,
-    fs::{self, File, OpenOptions},
-    io::{self, BufRead, BufReader, Read, Write},
-    os::unix::{self, fs::symlink},
-    path::PathBuf,
+    fs::{self, read_link, File, OpenOptions},
+    io::{self, BufRead, BufReader, Write},
+    os::unix::fs::symlink,
+    path::{Path, PathBuf},
 };
 
 use flate2::read::GzDecoder;
@@ -43,7 +43,11 @@ pub fn setup() -> anyhow::Result<()> {
     }
 
     let exe_path = env::current_exe()?;
-    symlink(exe_path, svm_dir.join("surreal")).unwrap();
+    let svm_path = svm_dir.join("surrealvm");
+    fs::copy(&exe_path, &svm_path)?;
+    let none_path = svm_dir.join("surreal-none");
+    symlink(svm_path, &none_path)?;
+    symlink(none_path, svm_dir.join("surreal"))?;
 
     Ok(())
 }
@@ -96,13 +100,82 @@ pub fn clean() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn get_latest() -> anyhow::Result<Version> {
-    let ver_res = get("https://download.surrealdb.com/latest.txt")?;
+fn get_named(name: impl AsRef<str>) -> anyhow::Result<Version> {
+    let ver_res = get(format!(
+        "https://download.surrealdb.com/{}.txt",
+        name.as_ref()
+    ))?;
     parse_surreal_version(&ver_res.text()?)
 }
 
-fn parse_surreal_version(ver_str: &str) -> anyhow::Result<Version> {
-    Ok(Version::parse(&ver_str.trim().trim_start_matches('v'))?)
+fn parse_surreal_version(ver_str: impl AsRef<str>) -> anyhow::Result<Version> {
+    Ok(Version::parse(
+        &ver_str.as_ref().trim().trim_start_matches('v'),
+    )?)
+}
+
+enum VerSelection {
+    Special(SpecialVer),
+    Custom(Version),
+}
+enum SpecialVer {
+    None,
+    Latest,
+    Beta,
+    Alpha,
+    Nightly,
+}
+impl VerSelection {
+    fn parse(value: impl AsRef<str>) -> anyhow::Result<VerSelection> {
+        Ok(match value.as_ref() {
+            "none" => VerSelection::Special(SpecialVer::None),
+            "latest" => VerSelection::Special(SpecialVer::Latest),
+            "beta" => VerSelection::Special(SpecialVer::Beta),
+            "alpha" => VerSelection::Special(SpecialVer::Alpha),
+            "nightly" => VerSelection::Special(SpecialVer::Nightly),
+            v => {
+                let tmp = parse_surreal_version(v)?;
+                VerSelection::Custom(tmp)
+            }
+        })
+    }
+    fn to_sname(&self) -> String {
+        match self {
+            VerSelection::Special(s) => s.to_name().to_string(),
+            VerSelection::Custom(v) => format!("v{v}"),
+        }
+    }
+    fn to_special(&self) -> Option<&'static str> {
+        match self {
+            VerSelection::Special(s) => Some(s.to_name()),
+            VerSelection::Custom(_) => None,
+        }
+    }
+    fn to_version(&self) -> anyhow::Result<Version> {
+        Ok(match self {
+            VerSelection::Custom(v) => v.to_owned(),
+            VerSelection::Special(s) => get_named(s.to_name())?,
+        })
+    }
+}
+impl SpecialVer {
+    fn to_name(&self) -> &'static str {
+        match self {
+            SpecialVer::None => "none",
+            SpecialVer::Latest => "latest",
+            SpecialVer::Beta => "leta",
+            SpecialVer::Alpha => "alpha",
+            SpecialVer::Nightly => "nightly",
+        }
+    }
+}
+
+fn relink<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> anyhow::Result<()> {
+    if link.as_ref().exists() {
+        fs::remove_file(&link)?;
+    }
+    symlink(original, link)?;
+    Ok(())
 }
 
 pub fn install(ver: String) -> anyhow::Result<()> {
@@ -111,20 +184,22 @@ pub fn install(ver: String) -> anyhow::Result<()> {
         throw!("svm directory doesn't exist try: surrealvm setup");
     }
 
-    let ver = match ver.as_str() {
-        "latest" => get_latest()?,
-        v => parse_surreal_version(v)?,
-    };
+    let ver_sel = VerSelection::parse(&ver)?;
+
+    let ver = ver_sel.to_version()?;
 
     let sver = format!("v{ver}");
 
     let bin_name = format!("surreal-{ver}");
+    let bin_path = svm_dir.join(&bin_name);
     let sbin_name = format!("surreal-{sver}");
+    let sbin_path = svm_dir.join(&sbin_name);
 
-    let tgz_path = svm_dir.join(format!("{sbin_name}.tgz"));
-    if tgz_path.exists() {
+    if sbin_path.exists() {
         throw!("specified version already installed (--force support wip)");
     }
+
+    let tgz_path = svm_dir.join(format!("{sbin_name}.tgz"));
 
     let url = format!("https://download.surrealdb.com/{sver}/surreal-{sver}.{OSS}-{CPU}.tgz");
     let res = get(url)?;
@@ -144,16 +219,74 @@ pub fn install(ver: String) -> anyhow::Result<()> {
     let bin_out_dir = svm_dir.join(format!("tmp_{sbin_name}"));
 
     output.unpack(&bin_out_dir)?;
-    fs::rename(bin_out_dir.join("surreal"), svm_dir.join(&sbin_name))?;
+    fs::rename(bin_out_dir.join("surreal"), &sbin_path)?;
     fs::remove_dir(bin_out_dir)?;
 
-    symlink(svm_dir.join(sbin_name), svm_dir.join(bin_name))?;
+    symlink(&sbin_path, &bin_path)?;
 
     // TODO; allow --use command to use here
+
+    if let Some(n) = ver_sel.to_special() {
+        relink(
+            svm_dir.join(sbin_name),
+            svm_dir.join(format!("surreal-{n}")),
+        )?;
+    }
 
     Ok(())
 }
 
 pub fn list() -> anyhow::Result<()> {
+    let (_home_dir, svm_dir) = get_home_svm()?;
+    if !svm_dir.exists() {
+        throw!("svm directory doesn't exist try: surrealvm setup");
+    }
+
+    let mut special_acc = Vec::new();
+    let mut ver_acc = Vec::new();
+    for entry in fs::read_dir(&svm_dir)? {
+        let Ok(entry) = entry else {
+            continue;
+        };
+
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if let Some(ver) = name.strip_prefix("surreal-v") {
+            ver_acc.push(format!("v{ver}"));
+        } else if let Some(name) = VerSelection::parse(name.trim_start_matches("surreal-"))
+            .ok()
+            .map(|vs| vs.to_special())
+            .flatten()
+        {
+            special_acc.push(name.to_string());
+        }
+    }
+
+    let selected_path = read_link(svm_dir.join("surreal"))?;
+    let ver_sel = if let Some(name) = selected_path.file_name() {
+        if let Ok(vs) = VerSelection::parse(name.to_string_lossy().trim_start_matches("surreal-")) {
+            Some(vs.to_sname())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    let ver_sel = match ver_sel {
+        Some(v) => v,
+        None => {
+            eprintln!("warning: failed to parse selected version");
+            "none".to_string()
+        }
+    };
+
+    for ver in special_acc.iter().chain(ver_acc.iter()) {
+        if ver == &ver_sel {
+            println!("{ver} *");
+        } else {
+            println!("{ver}");
+        }
+    }
+
     Ok(())
 }
