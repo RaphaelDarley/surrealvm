@@ -17,6 +17,7 @@ fn main() -> anyhow::Result<()> {
         SubCommands::Clean => clean(),
         SubCommands::List => list(),
         SubCommands::Install { version } => install(version),
+        SubCommands::Use { version } => vuse(version),
     }
 }
 
@@ -34,6 +35,10 @@ enum SubCommands {
     #[command(alias = "ls")]
     List,
     Install {
+        #[arg(value_name = "VERSION", default_value_t = String::from("latest"))]
+        version: String,
+    },
+    Use {
         #[arg(value_name = "VERSION", default_value_t = String::from("latest"))]
         version: String,
     },

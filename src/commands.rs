@@ -290,3 +290,22 @@ pub fn list() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+pub fn vuse(ver: String) -> anyhow::Result<()> {
+    let (_home_dir, svm_dir) = get_home_svm()?;
+    if !svm_dir.exists() {
+        throw!("svm directory doesn't exist try: surrealvm setup");
+    }
+
+    let ver_sel = VerSelection::parse(ver)?;
+    let ver_name = ver_sel.to_sname();
+    let target = svm_dir.join(format!("surreal-{ver_name}"));
+    if !target.exists() {
+        throw!(format!(
+            "couldn't find target, try --install (wip) or surrealvm install {ver_name}"
+        ))
+    }
+    relink(target, svm_dir.join("surreal"))?;
+
+    Ok(())
+}
