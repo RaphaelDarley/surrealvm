@@ -16,8 +16,8 @@ fn main() -> anyhow::Result<()> {
         SubCommands::Setup => setup(),
         SubCommands::Clean => clean(),
         SubCommands::List => list(),
-        SubCommands::Install { version } => install(version),
-        SubCommands::Use { version } => vuse(version),
+        SubCommands::Install { version, r#use } => install(version, r#use),
+        SubCommands::Use { version, install } => vuse(version, install),
     }
 }
 
@@ -39,12 +39,20 @@ enum SubCommands {
     List,
     /// install specified SurrealDB version
     Install {
+        /// version of SurrealDB to install: latest, alpha, beta, nightly, or semver
         #[arg(value_name = "VERSION", default_value_t = String::from("latest"))]
         version: String,
+        /// immediatly uses installed version
+        #[arg(long, short)]
+        r#use: bool,
     },
     /// use specified SurrealDB version
     Use {
+        /// version of SurrealDB to use: none, latest, alpha, beta, nightly, or semver
         #[arg(value_name = "VERSION", default_value_t = String::from("latest"))]
         version: String,
+        /// install if it doesn't exist
+        #[arg(long, short)]
+        install: bool,
     },
 }

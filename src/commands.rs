@@ -163,7 +163,7 @@ impl SpecialVer {
         match self {
             SpecialVer::None => "none",
             SpecialVer::Latest => "latest",
-            SpecialVer::Beta => "leta",
+            SpecialVer::Beta => "beta",
             SpecialVer::Alpha => "alpha",
             SpecialVer::Nightly => "nightly",
         }
@@ -178,7 +178,7 @@ fn relink<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> anyhow::Resul
     Ok(())
 }
 
-pub fn install(ver: String) -> anyhow::Result<()> {
+pub fn install(ver: String, vuse: bool) -> anyhow::Result<()> {
     let (_home_dir, svm_dir) = get_home_svm()?;
     if !svm_dir.exists() {
         throw!("svm directory doesn't exist try: surrealvm setup");
@@ -224,12 +224,17 @@ pub fn install(ver: String) -> anyhow::Result<()> {
 
     symlink(&sbin_path, &bin_path)?;
 
-    // TODO; allow --use command to use here
-
     if let Some(n) = ver_sel.to_special() {
         relink(
             svm_dir.join(sbin_name),
             svm_dir.join(format!("surreal-{n}")),
+        )?;
+    }
+
+    if vuse {
+        relink(
+            svm_dir.join(format!("surreal-{}", ver_sel.to_sname())),
+            svm_dir.join("surreal"),
         )?;
     }
 
@@ -291,7 +296,7 @@ pub fn list() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn vuse(ver: String) -> anyhow::Result<()> {
+pub fn vuse(ver: String, install_opt: bool) -> anyhow::Result<()> {
     let (_home_dir, svm_dir) = get_home_svm()?;
     if !svm_dir.exists() {
         throw!("svm directory doesn't exist try: surrealvm setup");
@@ -301,8 +306,11 @@ pub fn vuse(ver: String) -> anyhow::Result<()> {
     let ver_name = ver_sel.to_sname();
     let target = svm_dir.join(format!("surreal-{ver_name}"));
     if !target.exists() {
+        if install_opt {
+            return install(ver_name, true);
+        }
         throw!(format!(
-            "couldn't find target, try --install (wip) or surrealvm install {ver_name}"
+            "couldn't find target, try --install {ver_name} or surrealvm install {ver_name}"
         ))
     }
     relink(target, svm_dir.join("surreal"))?;
